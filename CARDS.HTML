@@ -54,6 +54,21 @@ body {
   gap:6px;
 }
 
+#fx-layer {
+  position:fixed;
+  inset:0;
+  z-index:0;
+  pointer-events:none;
+  overflow:hidden;
+}
+#fx-layer canvas {
+  width:100%;
+  height:100%;
+  display:block;
+  opacity:0.84;
+  filter:saturate(1.08);
+}
+
 /* HEADER */
 #header {
   display:flex; justify-content:space-between; align-items:center;
@@ -317,6 +332,9 @@ body {
 .anim-deck-kick { animation:deckKick3D 0.45s cubic-bezier(0.22,0.7,0.24,1); }
 
 @media (prefers-reduced-motion: reduce) {
+  #fx-layer {
+    display:none !important;
+  }
   #deck-inner,
   #pile-inner,
   .card.back,
@@ -373,6 +391,7 @@ body {
 <body>
 
 <div id="table-bg"></div>
+<div id="fx-layer" aria-hidden="true"></div>
 
 <!-- START OVERLAY -->
 <div id="start-overlay" class="overlay">
@@ -484,6 +503,15 @@ function match(c,t){ return c.r===t.r||c.s===t.s; }
 function isRed(c){ return REDS.has(c.s); }
 function topPile(){ return pile.length?pile[pile.length-1]:null; }
 function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
+function fxBurst(type='play', power=1){
+  if(window.snapFx && typeof window.snapFx.burst==='function') window.snapFx.burst(type,power);
+}
+function fxTurn(playerIsActive){
+  if(window.snapFx && typeof window.snapFx.turn==='function') window.snapFx.turn(playerIsActive);
+}
+function fxVictory(playerWins){
+  if(window.snapFx && typeof window.snapFx.victory==='function') window.snapFx.victory(playerWins);
+}
 
 function bindCardTilt(el, strength){
   if(!CAN_TILT || !el || el.dataset.tiltBound==='1') return;
@@ -679,6 +707,8 @@ function startGame(){
   pile.push(deck.pop());
   render();
   pulseTopPileCard();
+  fxTurn(true);
+  fxBurst('start',1.2);
   setStatus('Your turn! Draw or play a matching card.');
 }
 
@@ -695,6 +725,7 @@ function playerDraw(){
     const c=deck.pop(); pHand.push(c); selectedIdx=null;
     render();
     kickDeck3D();
+    fxBurst('draw',1.05);
     flash('deck-wrap',true);
     setStatus(`You drew ${c.r} ${c.s}!`, 'Now play a matching card from your hand');
     checkWin();
@@ -710,6 +741,7 @@ function playCard(idx){
   if(top&&!match(card,top)){
     selectedIdx=idx;
     flash('pile-wrap',false);
+    fxBurst('error',1);
     setStatus(`❌ ${card.r}${card.s} doesn't match ${top.r}${top.s} — need same rank or suit!`);
     renderPlayer();
     refresh3DInteractions();
@@ -720,6 +752,7 @@ function playCard(idx){
   pHand.splice(idx,1); pile.push(card); selectedIdx=null;
   render();
   pulseTopPileCard();
+  fxBurst('play',1.1);
   flash('pile-wrap',true);
 
   // Check triple sweep
@@ -728,6 +761,7 @@ function playCard(idx){
     if(a.r===b.r&&b.r===c2.r){
       pWon.push(...pile.splice(0)); // sweep all
       render();
+      fxBurst('sweep',2.2);
       flash('p-won-pile',true);
       setStatus(`🔥 TRIPLE ${card.r}! You swept the whole pile! +${pWon.length} cards!`);
       if(checkWin()) return;
@@ -739,6 +773,7 @@ function playCard(idx){
   setStatus(`Played ${card.r}${card.s} ✓ — AI thinking...`,'');
   if(checkWin()) return;
   playerTurn=false; busy=true;
+  fxTurn(false);
   setTimeout(aiTurn, 800+Math.random()*500);
 }
 
@@ -759,6 +794,7 @@ function aiTurn(){
     pile.push(card);
     render();
     pulseTopPileCard();
+    fxBurst('play',0.95);
     flash('pile-wrap',true);
 
     // Triple check
@@ -766,10 +802,12 @@ function aiTurn(){
       const [a,b,c2]=[pile[pile.length-3],pile[pile.length-2],pile[pile.length-1]];
       if(a.r===b.r&&b.r===c2.r){
         aiWon.push(...pile.splice(0));
+        fxBurst('sweep',1.8);
         render(); flash('a-won-pile',true);
         setStatus(`🤖 AI TRIPLE ${card.r}! AI swept the pile! +${aiWon.length} cards!`);
         if(checkWin()) return;
         playerTurn=true; busy=false;
+        fxTurn(true);
         setTimeout(()=>setStatus(`Your turn! Draw or play.`),1200);
         return;
       }
@@ -783,14 +821,17 @@ function aiTurn(){
     if(deck.length){
       const c=deck.pop(); aiHand.push(c); render();
       kickDeck3D();
+      fxBurst('draw',0.8);
       setStatus(`AI drew a card — your turn!`,'Draw or play a matching card');
     } else {
+      fxBurst('error',0.55);
       setStatus(`AI is stuck! Your turn.`,'Draw or play a matching card');
     }
   }
 
   if(checkWin()) return;
   playerTurn=true; busy=false;
+  fxTurn(true);
 }
 
 // ===== WIN CHECK =====
@@ -802,6 +843,8 @@ function checkWin(){
 
 function endGame(playerWins){
   gameActive=false;
+  fxBurst('win',2.4);
+  fxVictory(playerWins);
   const eo=document.getElementById('end-overlay');
   document.getElementById('end-title').textContent=playerWins?'🏆 YOU WIN!':'💀 AI WINS';
   document.getElementById('end-title').style.color=playerWins?'#d4a843':'#c8192a';
@@ -810,6 +853,183 @@ function endGame(playerWins){
     :`The dealer cleared their hand. Cards collected: ${aiWon.length}`;
   eo.style.display='flex';
 }
+</script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.162.0/build/three.min.js"></script>
+<script>
+(()=>{
+  const host=document.getElementById('fx-layer');
+  const reduceMotion=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(!host||reduceMotion||typeof THREE==='undefined') return;
+
+  const clamp=(v,min,max)=>Math.max(min,Math.min(max,v));
+  let renderer;
+  try{
+    renderer=new THREE.WebGLRenderer({ alpha:true, antialias:true, powerPreference:'high-performance' });
+  }catch(err){ return; }
+
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.7));
+  renderer.setSize(window.innerWidth,window.innerHeight);
+  renderer.setClearColor(0x000000,0);
+  renderer.domElement.setAttribute('aria-hidden','true');
+  host.appendChild(renderer.domElement);
+
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(56,window.innerWidth/window.innerHeight,0.1,120);
+  camera.position.set(0,0.2,20);
+
+  const ambient=new THREE.AmbientLight(0x779977,0.45);
+  scene.add(ambient);
+
+  const keyLight=new THREE.PointLight(0xf0c96a,1.2,80,2);
+  keyLight.position.set(0,4,14);
+  scene.add(keyLight);
+
+  const rimLight=new THREE.PointLight(0x39ff85,0.55,60,2);
+  rimLight.position.set(0,-8,8);
+  scene.add(rimLight);
+
+  const rings=new THREE.Group();
+  scene.add(rings);
+
+  const ringMainMat=new THREE.MeshBasicMaterial({ color:0xd4a843, transparent:true, opacity:0.18 });
+  const ringSubMat=new THREE.MeshBasicMaterial({ color:0x39ff85, transparent:true, opacity:0.08 });
+  const ringMain=new THREE.Mesh(new THREE.TorusGeometry(7.8,0.12,18,128),ringMainMat);
+  ringMain.rotation.x=1.26;
+  ringMain.position.y=-1.1;
+  rings.add(ringMain);
+  const ringSub=new THREE.Mesh(new THREE.TorusGeometry(5.9,0.09,14,96),ringSubMat);
+  ringSub.rotation.x=1.2;
+  ringSub.rotation.z=0.65;
+  ringSub.position.y=-1.1;
+  rings.add(ringSub);
+
+  const sparkCount=window.innerWidth<760?220:380;
+  const sparkPos=new Float32Array(sparkCount*3);
+  const sparkRadius=new Float32Array(sparkCount);
+  const sparkHeight=new Float32Array(sparkCount);
+  const sparkPhase=new Float32Array(sparkCount);
+  const sparkSpin=new Float32Array(sparkCount);
+
+  for(let i=0;i<sparkCount;i++){
+    sparkRadius[i]=2.4+Math.random()*7.4;
+    sparkHeight[i]=(Math.random()-0.5)*4.2;
+    sparkPhase[i]=Math.random()*Math.PI*2;
+    sparkSpin[i]=0.1+Math.random()*0.42;
+    const k=i*3;
+    sparkPos[k]=Math.cos(sparkPhase[i])*sparkRadius[i];
+    sparkPos[k+1]=sparkHeight[i];
+    sparkPos[k+2]=Math.sin(sparkPhase[i])*(sparkRadius[i]*0.5)-5.2;
+  }
+
+  const sparkGeo=new THREE.BufferGeometry();
+  sparkGeo.setAttribute('position',new THREE.BufferAttribute(sparkPos,3));
+  const sparkMat=new THREE.PointsMaterial({
+    color:0xf7d98a,
+    size:window.innerWidth<760?0.085:0.068,
+    transparent:true,
+    opacity:0.54,
+    blending:THREE.AdditiveBlending,
+    depthWrite:false
+  });
+  const sparks=new THREE.Points(sparkGeo,sparkMat);
+  scene.add(sparks);
+
+  const currentTint=new THREE.Color(0xd4a843);
+  const targetTint=new THREE.Color(0xd4a843);
+  const neonTint=new THREE.Color(0x39ff85);
+  const palette={
+    start:0xd4a843,
+    draw:0xf0c96a,
+    play:0x39ff85,
+    sweep:0xffbc4d,
+    error:0xc8192a,
+    win:0x9eff72,
+    lose:0xc8192a
+  };
+
+  let burstEnergy=0.2;
+  let turnBias=1;
+  let rafId=0;
+  const clock=new THREE.Clock();
+
+  function triggerBurst(type,power){
+    const tone=palette[type]||palette.play;
+    targetTint.setHex(tone);
+    const gain=type==='sweep'?0.95:type==='win'?1.15:type==='error'?0.75:0.55;
+    burstEnergy=clamp(burstEnergy+gain*Math.max(0.3,power||1),0,3.6);
+  }
+
+  window.snapFx={
+    burst(type,power){ triggerBurst(type,power); },
+    turn(playerIsActive){ turnBias=playerIsActive?1:0.48; },
+    victory(playerWins){
+      triggerBurst(playerWins?'win':'lose',1.4);
+      turnBias=playerWins?1:0.4;
+    }
+  };
+
+  function onResize(){
+    const w=window.innerWidth;
+    const h=window.innerHeight;
+    camera.aspect=w/h;
+    camera.updateProjectionMatrix();
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,1.7));
+    renderer.setSize(w,h);
+  }
+  window.addEventListener('resize',onResize,{ passive:true });
+
+  function animate(){
+    rafId=requestAnimationFrame(animate);
+    const t=clock.getElapsedTime();
+    burstEnergy=Math.max(0,burstEnergy*0.935);
+    currentTint.lerp(targetTint,0.052);
+
+    ringMain.rotation.z=t*0.085+burstEnergy*0.11;
+    ringSub.rotation.z=-t*0.12-burstEnergy*0.08;
+    rings.position.y=-1.08+Math.sin(t*0.9)*0.14;
+    rings.position.x=Math.sin(t*0.28)*0.18;
+
+    keyLight.position.x=Math.sin(t*0.7)*5.4;
+    keyLight.position.y=3.6+Math.cos(t*0.45)*1.2;
+    rimLight.position.x=Math.cos(t*0.52)*4.8;
+
+    const pos=sparkGeo.attributes.position.array;
+    const swell=1+burstEnergy*0.34;
+    for(let i=0;i<sparkCount;i++){
+      const k=i*3;
+      const angle=sparkPhase[i]+t*sparkSpin[i]*(1+burstEnergy*0.22);
+      const radius=sparkRadius[i]*swell+Math.sin(t*1.6+sparkPhase[i]*2.4)*0.2;
+      pos[k]=Math.cos(angle)*radius;
+      pos[k+1]=sparkHeight[i]+Math.sin(t*0.95+sparkPhase[i]*3.2)*0.18;
+      pos[k+2]=Math.sin(angle)*(radius*0.52)-5.2+Math.cos(t*1.1+sparkPhase[i])*0.42;
+    }
+    sparkGeo.attributes.position.needsUpdate=true;
+
+    sparkMat.color.copy(currentTint);
+    sparkMat.opacity=clamp(0.3+turnBias*0.22+burstEnergy*0.13,0.18,0.86);
+    ringMainMat.color.copy(currentTint);
+    ringMainMat.opacity=clamp(0.09+turnBias*0.08+burstEnergy*0.09,0.06,0.38);
+    ringSubMat.color.lerpColors(currentTint,neonTint,0.44);
+    ringSubMat.opacity=clamp(0.04+(1-turnBias)*0.09+burstEnergy*0.07,0.02,0.26);
+
+    renderer.render(scene,camera);
+  }
+
+  triggerBurst('start',0.8);
+  animate();
+
+  window.addEventListener('pagehide',()=>{
+    if(rafId) cancelAnimationFrame(rafId);
+    window.removeEventListener('resize',onResize);
+    if(renderer){
+      renderer.dispose();
+      if(renderer.domElement&&renderer.domElement.parentNode===host){
+        host.removeChild(renderer.domElement);
+      }
+    }
+    if(window.snapFx) delete window.snapFx;
+  },{ once:true });
+})();
 </script>
 </body>
 </html>
