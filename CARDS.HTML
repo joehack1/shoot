@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SNAP PALACE — Card Match Game</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Crimson+Text:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --felt: #0b1f0e;
+  --gold: #d4a843;
+  --gold2: #f0c96a;
+  --red: #c8192a;
+  --neon: #39ff85;
+  --card-w: 78px;
+  --card-h: 110px;
+  --card-perspective: 880px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: #081508;
+  font-family: 'Crimson Text', serif;
+  height: 100vh; overflow: hidden;
+  color: #fff;
+}
+
+/* Felt table oval */
+#table-bg {
+  position:fixed; top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  width:90vw; height:82vh;
+  border-radius:50%;
+  background: radial-gradient(ellipse at 50% 40%, #0e2d13 0%, #091d0c 55%, #060f07 100%);
+  border:8px solid rgba(212,168,67,0.2);
+  box-shadow: 0 0 80px rgba(0,0,0,0.9), inset 0 0 100px rgba(0,0,0,0.4), 0 0 0 12px rgba(212,168,67,0.06);
+}
+/* Felt grid */
+#table-bg::after {
+  content:'';
+  position:absolute; inset:0; border-radius:50%;
+  background-image:
+    repeating-linear-gradient(0deg,transparent,transparent 4px,rgba(255,255,255,0.008) 4px,rgba(255,255,255,0.008) 5px),
+    repeating-linear-gradient(90deg,transparent,transparent 4px,rgba(255,255,255,0.008) 4px,rgba(255,255,255,0.008) 5px);
+}
+
+#game {
+  position:relative; z-index:1;
+  height:100vh;
+  display:grid;
+  grid-template-rows:auto 1fr auto auto;
+  align-items:center;
+  padding:10px 20px;
+  gap:6px;
+}
+
+/* HEADER */
+#header {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:4px 14px;
+}
+#logo {
+  font-family:'Playfair Display',serif;
+  font-size:18px; font-weight:900;
+  color:var(--gold);
+  letter-spacing:0.2em;
+  text-shadow:0 0 16px rgba(212,168,67,0.4);
+}
+.hud-pills { display:flex; gap:10px; }
+.pill {
+  background:rgba(0,0,0,0.5);
+  border:1px solid rgba(212,168,67,0.18);
+  border-radius:20px; padding:4px 14px;
+  display:flex; flex-direction:column; align-items:center;
+}
+.pill .pl { font-size:9px; color:#3a6a3a; letter-spacing:0.12em; text-transform:uppercase; }
+.pill .pv { font-family:'Playfair Display',serif; font-size:16px; color:var(--gold); line-height:1; }
+.btn {
+  background:transparent; border:1px solid var(--gold); color:var(--gold);
+  padding:6px 18px; font-family:'Playfair Display',serif; font-size:12px;
+  letter-spacing:0.15em; text-transform:uppercase; cursor:pointer; border-radius:4px;
+  transition:all 0.2s;
+}
+.btn:hover { background:rgba(212,168,67,0.1); }
+.btn.green { border-color:var(--neon); color:var(--neon); }
+.btn.green:hover { background:rgba(57,255,133,0.08); }
+
+/* AI HAND */
+#ai-section { display:flex; flex-direction:column; align-items:center; gap:4px; }
+#ai-lbl { font-size:10px; color:#3a5a3a; letter-spacing:0.2em; text-transform:uppercase; }
+#ai-hand {
+  display:flex; justify-content:center;
+  position:relative; height:calc(var(--card-h) + 14px);
+  min-width:200px;
+  perspective:1000px;
+}
+
+/* CENTRE */
+#centre {
+  display:flex; align-items:center; justify-content:center; gap:24px;
+  padding:0 30px;
+}
+
+.zone-label {
+  font-size:10px; color:#2a4a2a; letter-spacing:0.12em; text-transform:uppercase;
+  text-align:center; margin-top:5px;
+}
+.zone-count {
+  font-family:'Playfair Display',serif; font-size:12px; color:var(--gold);
+  text-align:center; min-height:16px;
+}
+
+/* Won piles */
+.won-zone {
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+}
+.won-pile {
+  width:var(--card-w); height:var(--card-h);
+  border:2px dashed rgba(212,168,67,0.2);
+  border-radius:10px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:10px; color:#2a4a2a; text-align:center; line-height:1.4;
+  position:relative; overflow:hidden;
+}
+
+/* Deck zone */
+.deck-zone {
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+}
+#deck-wrap {
+  width:var(--card-w); height:var(--card-h);
+  position:relative; cursor:pointer;
+  transform-style:preserve-3d;
+  perspective:1100px;
+  transition:transform 0.18s ease, filter 0.18s ease;
+}
+#deck-wrap:hover { transform:scale(1.06) translateY(-3px) rotateX(10deg); filter:brightness(1.08); }
+#deck-wrap:hover::after {
+  content:'DRAW';
+  position:absolute; bottom:-22px; left:50%; transform:translateX(-50%);
+  font-size:10px; color:var(--neon); letter-spacing:0.1em;
+}
+#deck-inner {
+  width:100%; height:100%;
+  position:relative;
+  transform-style:preserve-3d;
+  animation:deckFloat 3.4s ease-in-out infinite;
+}
+
+/* Pile zone */
+.pile-zone {
+  display:flex; flex-direction:column; align-items:center; gap:3px;
+}
+#pile-wrap {
+  width:var(--card-w); height:var(--card-h);
+  position:relative;
+  transform-style:preserve-3d;
+  perspective:1100px;
+}
+#pile-inner {
+  width:100%; height:100%;
+  position:relative;
+  transform-style:preserve-3d;
+  animation:pileFloat 4.2s ease-in-out infinite;
+}
+#pile-info {
+  font-family:'Playfair Display',serif;
+  font-size:14px; color:var(--gold); text-align:center; min-height:18px;
+}
+
+/* STATUS */
+#status-section {
+  display:flex; flex-direction:column; align-items:center; gap:2px;
+  padding:4px;
+}
+#status-msg {
+  font-family:'Playfair Display',serif;
+  font-size:17px; color:var(--gold2);
+  text-shadow:0 0 12px rgba(240,201,106,0.4);
+  text-align:center; min-height:22px;
+  transition:all 0.3s;
+}
+#hint-msg { font-size:11px; color:#2a5a2a; letter-spacing:0.07em; text-align:center; }
+
+/* PLAYER HAND */
+#player-section { display:flex; flex-direction:column; align-items:center; gap:4px; }
+#player-lbl { font-size:10px; color:#4a9a4a; letter-spacing:0.2em; text-transform:uppercase; }
+#player-hand {
+  display:flex; justify-content:center; gap:7px;
+  flex-wrap:wrap; max-width:min(700px, 90vw);
+  perspective:1200px;
+}
+
+/* === CARDS === */
+.card {
+  width:var(--card-w); height:var(--card-h);
+  border-radius:10px; position:relative;
+  flex-shrink:0; user-select:none;
+  transform-style:preserve-3d;
+  backface-visibility:hidden;
+  will-change:transform, box-shadow, filter;
+  --pitch:0deg;
+  --yaw:0deg;
+  --spin:0deg;
+  --lift:0px;
+  --scale:1;
+  --gloss-x:50%;
+  --gloss-y:18%;
+  transform:
+    perspective(var(--card-perspective))
+    translateY(var(--lift))
+    scale(var(--scale))
+    rotateX(var(--pitch))
+    rotateY(var(--yaw))
+    rotateZ(var(--spin));
+  transition:transform 0.22s cubic-bezier(0.22,0.7,0.12,1), box-shadow 0.22s ease, filter 0.22s ease;
+}
+/* Back */
+.card.back {
+  background:linear-gradient(140deg,#2b0f5f 0%,#120530 58%,#080217 100%);
+  border:2px solid rgba(212,168,67,0.35);
+  box-shadow:2px 6px 14px rgba(0,0,0,0.55), 0 0 16px rgba(38,16,88,0.3);
+  background-size:200% 200%;
+  animation:cardBackFlow 6s ease-in-out infinite;
+}
+.card.back::before {
+  content:'';position:absolute;inset:5px;
+  border:1.5px solid rgba(212,168,67,0.2);border-radius:6px;
+}
+.card.back::after {
+  content:'♦';position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);font-size:26px;
+  color:rgba(212,168,67,0.45);font-family:'Playfair Display',serif;
+}
+/* Face */
+.card.face {
+  background:linear-gradient(160deg,#fffdfa 0%,#f2e9dc 100%);
+  border:2px solid rgba(0,0,0,0.12);
+  box-shadow:2px 8px 16px rgba(0,0,0,0.45), 0 0 10px rgba(255,255,255,0.06) inset;
+  display:flex;flex-direction:column;justify-content:space-between;
+  padding:5px 6px; overflow:hidden; cursor:pointer;
+}
+.card.face .card-gloss {
+  position:absolute;
+  inset:-38% -28%;
+  background:radial-gradient(circle at var(--gloss-x) var(--gloss-y), rgba(255,255,255,0.56), rgba(255,255,255,0) 46%);
+  mix-blend-mode:screen;
+  pointer-events:none;
+  opacity:0;
+  transform:translateZ(18px);
+  transition:opacity 0.2s ease;
+}
+.card.face .cr { display:flex;flex-direction:column;align-items:flex-start;line-height:1.1; position:relative; z-index:2; transform:translateZ(14px); }
+.card.face .cr.bot { align-items:flex-end; transform:rotate(180deg); }
+.card.face .rk { font-family:'Playfair Display',serif; font-size:19px; font-weight:700; line-height:1; }
+.card.face .st { font-size:14px; line-height:1; }
+.card.face .big { position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) translateZ(16px);font-size:36px; z-index:2; }
+.card.face.red { color:#c0141a; }
+.card.face.black { color:#0d0d20; }
+.card.tilt-active .card-gloss { opacity:0.72; }
+.card.face.tilt-active { box-shadow:0 16px 26px rgba(0,0,0,0.56), 0 0 22px rgba(240,201,106,0.2); }
+.card.back.tilt-active { box-shadow:0 16px 30px rgba(0,0,0,0.6), 0 0 20px rgba(79,34,170,0.45); }
+
+/* Player hand interactions */
+.hand-card { cursor:pointer; }
+.hand-card:hover { --lift:-14px; --scale:1.06; box-shadow:0 14px 28px rgba(0,0,0,0.6),0 0 18px rgba(57,255,133,0.2); z-index:10; }
+.hand-card.selected { --lift:-20px; --scale:1.08; box-shadow:0 16px 32px rgba(0,0,0,0.7),0 0 28px rgba(212,168,67,0.7) !important; border-color:var(--gold) !important; z-index:20; }
+.hand-card.unplayable { opacity:0.45; filter:saturate(0.3); }
+.hand-card.playable { filter:brightness(1.06); }
+
+/* Stacked */
+.stk { position:absolute; width:100%; height:100%; }
+
+/* Animations */
+@keyframes dealIn {
+  from{opacity:0;transform:perspective(var(--card-perspective)) translateY(-34px) scale(0.82) rotateX(52deg) rotateY(-14deg);}
+  to{opacity:1;transform:perspective(var(--card-perspective)) translateY(var(--lift)) scale(var(--scale)) rotateX(var(--pitch)) rotateY(var(--yaw)) rotateZ(var(--spin));}
+}
+@keyframes flashGreen { 0%,100%{box-shadow:2px 3px 10px rgba(0,0,0,0.45);}50%{box-shadow:0 0 28px rgba(26,200,74,0.8);} }
+@keyframes flashRed { 0%,100%{box-shadow:2px 3px 10px rgba(0,0,0,0.45);}50%{box-shadow:0 0 28px rgba(200,25,42,0.8);} }
+@keyframes bounce { 0%,100%{transform:scale(1);}40%{transform:scale(1.12);} }
+@keyframes flipPop {
+  from{opacity:0;transform:perspective(var(--card-perspective)) translateY(14px) scale(0.88) rotateX(-48deg) rotateY(-26deg);}
+  to{opacity:1;transform:perspective(var(--card-perspective)) translateY(var(--lift)) scale(var(--scale)) rotateX(var(--pitch)) rotateY(var(--yaw)) rotateZ(var(--spin));}
+}
+@keyframes cardBackFlow {
+  0%,100%{background-position:0% 0%;}
+  50%{background-position:100% 100%;}
+}
+@keyframes deckFloat {
+  0%,100%{transform:translateY(0) rotateX(0deg);}
+  50%{transform:translateY(-4px) rotateX(5deg);}
+}
+@keyframes pileFloat {
+  0%,100%{transform:translateY(0) rotateX(0deg);}
+  50%{transform:translateY(-3px) rotateX(4deg);}
+}
+.anim-deal { animation:dealIn 0.28s ease-out; }
+.anim-green { animation:flashGreen 0.5s ease; }
+.anim-red { animation:flashRed 0.4s ease; }
+.anim-bounce { animation:bounce 0.35s ease; }
+.anim-flip { animation:flipPop 0.4s cubic-bezier(0.2,0.72,0.2,1); }
+
+@media (prefers-reduced-motion: reduce) {
+  #deck-inner,
+  #pile-inner,
+  .card.back,
+  .anim-deal,
+  .anim-green,
+  .anim-red,
+  .anim-bounce,
+  .anim-flip {
+    animation:none !important;
+  }
+  .card,
+  #deck-wrap {
+    transition:none !important;
+  }
+}
+
+/* OVERLAYS */
+.overlay {
+  position:fixed;inset:0;z-index:200;
+  background:rgba(0,0,0,0.92);
+  display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:18px;
+}
+.overlay h1 {
+  font-family:'Playfair Display',serif;
+  font-size:48px; color:var(--gold);
+  text-shadow:0 0 40px rgba(212,168,67,0.8);
+  letter-spacing:0.2em;
+}
+.overlay .rules-box {
+  background:rgba(255,255,255,0.03);
+  border:1px solid rgba(212,168,67,0.15);
+  border-radius:12px; padding:20px 32px;
+  max-width:480px;
+}
+.overlay .rules-box h3 {
+  font-family:'Playfair Display',serif;
+  color:var(--gold2); font-size:15px; letter-spacing:0.1em; margin-bottom:12px;
+}
+.overlay .rules-box li {
+  font-size:15px; color:#99cc99; margin:5px 0; padding-left:18px; position:relative; list-style:none;
+}
+.overlay .rules-box li::before { content:'♣'; position:absolute;left:0;color:var(--gold);font-size:11px;top:2px; }
+.overlay p.tagline { font-size:17px; color:#5a9a5a; text-align:center; }
+
+#end-overlay { display:none; }
+#end-title { font-family:'Playfair Display',serif; font-size:56px; letter-spacing:0.2em; }
+#end-sub { font-size:17px; color:#7ab87a; }
+</style>
+</head>
+<body>
+
+<div id="table-bg"></div>
+
+<!-- START OVERLAY -->
+<div id="start-overlay" class="overlay">
+  <h1>♠ SNAP PALACE ♠</h1>
+  <p class="tagline">Draw from the centre. Match to play. Empty your hand to win.</p>
+  <div class="rules-box">
+    <h3>RULES</h3>
+    <ul>
+      <li>Each player starts with 5 cards</li>
+      <li>Click the <strong>deck</strong> to draw a card</li>
+      <li>Play a card matching the pile's <strong>rank OR suit</strong></li>
+      <li>Get 3 of the same rank in a row → <strong>sweep the pile!</strong></li>
+      <li>First player to <strong>empty their hand</strong> wins</li>
+    </ul>
+  </div>
+  <button class="btn green" onclick="startGame()">♠ DEAL CARDS ♠</button>
+</div>
+
+<!-- END OVERLAY -->
+<div id="end-overlay" class="overlay">
+  <div id="end-title"></div>
+  <div id="end-sub"></div>
+  <button class="btn green" onclick="startGame()">PLAY AGAIN</button>
+</div>
+
+<!-- GAME -->
+<div id="game">
+
+  <!-- Header -->
+  <div id="header">
+    <div id="logo">♠ SNAP PALACE</div>
+    <div class="hud-pills">
+      <div class="pill"><div class="pl">Your Hand</div><div class="pv" id="p-count">5</div></div>
+      <div class="pill"><div class="pl">AI Hand</div><div class="pv" id="a-count">5</div></div>
+      <div class="pill"><div class="pl">Deck</div><div class="pv" id="d-count">41</div></div>
+      <div class="pill"><div class="pl">Pile</div><div class="pv" id="pile-count">1</div></div>
+    </div>
+    <button class="btn" onclick="startGame()">New Game</button>
+  </div>
+
+  <!-- AI Section -->
+  <div id="ai-section">
+    <div id="ai-lbl">☁ DEALER — AI ☁</div>
+    <div id="ai-hand"></div>
+  </div>
+
+  <!-- Centre Table -->
+  <div id="centre">
+
+    <!-- Player won pile -->
+    <div class="won-zone">
+      <div class="won-pile" id="p-won-pile"><span>YOUR<br>WON<br>PILE</span></div>
+      <div class="zone-label">Your Won</div>
+      <div class="zone-count" id="p-won-count"></div>
+    </div>
+
+    <!-- Draw Deck -->
+    <div class="deck-zone">
+      <div id="deck-wrap" onclick="playerDraw()">
+        <div id="deck-inner"></div>
+      </div>
+      <div class="zone-label">DRAW DECK</div>
+      <div class="zone-count" id="deck-label">0 cards</div>
+    </div>
+
+    <!-- Play Pile -->
+    <div class="pile-zone">
+      <div id="pile-wrap"><div id="pile-inner"></div></div>
+      <div class="zone-label">PLAY PILE</div>
+      <div id="pile-info"></div>
+    </div>
+
+    <!-- AI won pile -->
+    <div class="won-zone">
+      <div class="won-pile" id="a-won-pile"><span>AI<br>WON<br>PILE</span></div>
+      <div class="zone-label">AI Won</div>
+      <div class="zone-count" id="a-won-count"></div>
+    </div>
+
+  </div>
+
+  <!-- Status -->
+  <div id="status-section">
+    <div id="status-msg">Deal cards to start!</div>
+    <div id="hint-msg">Click the deck to draw · Click a matching card in your hand to play</div>
+  </div>
+
+  <!-- Player Hand -->
+  <div id="player-section">
+    <div id="player-lbl">▲ YOUR HAND — CLICK A CARD TO PLAY ▲</div>
+    <div id="player-hand"></div>
+  </div>
+
+</div>
+
+<script>
+const SUITS = ['♠','♥','♦','♣'];
+const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+const REDS = new Set(['♥','♦']);
+
+let deck=[], pile=[], pHand=[], aiHand=[], pWon=[], aiWon=[];
+let selectedIdx=null, playerTurn=true, busy=false, gameActive=false;
+
+function mkDeck(){ const d=[]; for(const s of SUITS) for(const r of RANKS) d.push({r,s}); return d; }
+function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];} return a; }
+function match(c,t){ return c.r===t.r||c.s===t.s; }
+function isRed(c){ return REDS.has(c.s); }
+function topPile(){ return pile.length?pile[pile.length-1]:null; }
+
+// ===== CARD HTML =====
+function cardFace(c, extra=''){
+  const col=isRed(c)?'red':'black';
+  return `<div class="card face ${col} ${extra}" data-r="${c.r}" data-s="${c.s}">
+    <div class="cr"><div class="rk">${c.r}</div><div class="st">${c.s}</div></div>
+    <div class="big">${c.s}</div>
+    <div class="cr bot"><div class="rk">${c.r}</div><div class="st">${c.s}</div></div>
+  </div>`;
+}
+function cardBack(extra=''){
+  return `<div class="card back ${extra}"></div>`;
+}
+
+// ===== RENDER =====
+function render(){
+  renderDeck(); renderPile(); renderAI(); renderPlayer(); renderWon(); updateHUD();
+}
+
+function renderDeck(){
+  const el=document.getElementById('deck-inner');
+  if(!deck.length){
+    el.innerHTML=`<div class="card" style="border:2px dashed rgba(212,168,67,0.2);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#2a4a2a;font-size:10px;letter-spacing:0.08em;text-align:center;padding:8px;">CLICK TO<br>RESHUFFLE</div>`;
+  } else {
+    const n=Math.min(5,deck.length);
+    let h='';
+    for(let i=0;i<n;i++) h+=`<div class="card back stk" style="top:-${i*2}px;left:${i*2}px;z-index:${i};"></div>`;
+    el.innerHTML=h;
+  }
+  document.getElementById('deck-label').textContent=deck.length+' card'+(deck.length!==1?'s':'');
+}
+
+function renderPile(){
+  const el=document.getElementById('pile-inner');
+  if(!pile.length){
+    el.innerHTML=`<div class="card" style="border:2px dashed rgba(212,168,67,0.2);border-radius:10px;display:flex;align-items:center;justify-content:center;color:#2a4a2a;font-size:11px;text-align:center;padding:8px;">PLAY<br>PILE</div>`;
+    document.getElementById('pile-info').textContent='';
+  } else {
+    const top=pile[pile.length-1];
+    let h='';
+    const show=Math.min(4,pile.length);
+    for(let i=pile.length-show;i<pile.length;i++){
+      const off=(i-(pile.length-show));
+      const isTop=i===pile.length-1;
+      h+=`<div class="stk" style="top:-${off*2}px;left:${off*2}px;z-index:${off};">${isTop?cardFace(top):cardBack()}</div>`;
+    }
+    el.innerHTML=h;
+    document.getElementById('pile-info').textContent=top.r+' '+top.s;
+  }
+  document.getElementById('pile-count').textContent=pile.length;
+}
+
+function renderAI(){
+  const el=document.getElementById('ai-hand');
+  el.innerHTML='';
+  const n=aiHand.length;
+  const spread=Math.max(14, Math.min(28, 300/Math.max(1,n)));
+  const totalW=n*spread+78;
+  el.style.width=totalW+'px';
+  const mid=(n-1)/2;
+  aiHand.forEach((c,i)=>{
+    const angle=(i-mid)*2.5;
+    const dip=Math.abs(i-mid)*1.5;
+    const div=document.createElement('div');
+    div.style.cssText=`position:absolute;left:${i*spread}px;top:${dip}px;z-index:${i};transform:rotate(${angle}deg);`;
+    div.innerHTML=cardBack('anim-deal');
+    div.firstChild.style.animationDelay=(i*0.04)+'s';
+    el.appendChild(div);
+  });
+  document.getElementById('a-count').textContent=n;
+}
+
+function renderPlayer(){
+  const el=document.getElementById('player-hand');
+  el.innerHTML='';
+  const top=topPile();
+  pHand.forEach((c,i)=>{
+    const canPlay=!top||match(c,top);
+    const isSel=selectedIdx===i;
+    const div=document.createElement('div');
+    div.innerHTML=cardFace(c,'hand-card'+(isSel?' selected':(!canPlay?' unplayable':' playable')));
+    const card=div.firstChild;
+    card.style.animationDelay='';
+    card.addEventListener('click',()=>playCard(i));
+    el.appendChild(card);
+  });
+  document.getElementById('p-count').textContent=pHand.length;
+}
+
+function renderWon(){
+  const pw=document.getElementById('p-won-pile');
+  const aw=document.getElementById('a-won-pile');
+  if(pWon.length){
+    const top=pWon[pWon.length-1];
+    pw.innerHTML=cardFace(top); pw.style.border='none';
+  } else { pw.innerHTML='<span>YOUR<br>WON<br>PILE</span>'; pw.style.border=''; }
+  if(aiWon.length){
+    const top=aiWon[aiWon.length-1];
+    aw.innerHTML=cardFace(top); aw.style.border='none';
+  } else { aw.innerHTML='<span>AI<br>WON<br>PILE</span>'; aw.style.border=''; }
+  document.getElementById('p-won-count').textContent=pWon.length?pWon.length+' won':'';
+  document.getElementById('a-won-count').textContent=aiWon.length?aiWon.length+' won':'';
+}
+
+function updateHUD(){
+  document.getElementById('d-count').textContent=deck.length;
+  document.getElementById('p-count').textContent=pHand.length;
+  document.getElementById('a-count').textContent=aiHand.length;
+}
+
+function setStatus(msg,hint=''){
+  document.getElementById('status-msg').textContent=msg;
+  document.getElementById('hint-msg').textContent=hint||'Click the deck to draw · Click a matching card to play it';
+}
+
+function flash(id, ok){
+  const el=document.getElementById(id);
+  if(!el) return;
+  el.classList.remove('anim-green','anim-red','anim-bounce');
+  void el.offsetWidth;
+  el.classList.add(ok?'anim-green':'anim-red');
+  setTimeout(()=>el.classList.remove('anim-green','anim-red'),600);
+}
+
+// ===== GAME START =====
+function startGame(){
+  document.getElementById('start-overlay').style.display='none';
+  document.getElementById('end-overlay').style.display='none';
+  deck=shuffle(mkDeck());
+  pile=[]; pHand=[]; aiHand=[]; pWon=[]; aiWon=[];
+  selectedIdx=null; playerTurn=true; busy=false; gameActive=true;
+  for(let i=0;i<5;i++){ pHand.push(deck.pop()); aiHand.push(deck.pop()); }
+  pile.push(deck.pop());
+  render();
+  setStatus('Your turn! Draw or play a matching card.');
+}
+
+// ===== PLAYER DRAW =====
+function playerDraw(){
+  if(!gameActive||!playerTurn||busy) return;
+  if(!deck.length){
+    if(pile.length>1){
+      const top=pile.pop(); deck=shuffle(pile); pile=[top];
+      setStatus('Deck reshuffled from the play pile!');
+    } else { setStatus('No cards left anywhere!'); return; }
+  }
+  if(deck.length){
+    const c=deck.pop(); pHand.push(c); selectedIdx=null;
+    render();
+    flash('deck-wrap',true);
+    setStatus(`You drew ${c.r} ${c.s}!`, 'Now play a matching card from your hand');
+    checkWin();
+  }
+}
+
+// ===== PLAYER PLAY =====
+function playCard(idx){
+  if(!gameActive||!playerTurn||busy) return;
+  const card=pHand[idx];
+  const top=topPile();
+
+  if(top&&!match(card,top)){
+    selectedIdx=idx;
+    flash('pile-wrap',false);
+    setStatus(`❌ ${card.r}${card.s} doesn't match ${top.r}${top.s} — need same rank or suit!`);
+    renderPlayer();
+    return;
+  }
+
+  // Play it!
+  pHand.splice(idx,1); pile.push(card); selectedIdx=null;
+  render(); flash('pile-wrap',true);
+
+  // Check triple sweep
+  if(pile.length>=3){
+    const [a,b,c2]=[pile[pile.length-3],pile[pile.length-2],pile[pile.length-1]];
+    if(a.r===b.r&&b.r===c2.r){
+      pWon.push(...pile.splice(0)); // sweep all
+      render();
+      flash('p-won-pile',true);
+      setStatus(`🔥 TRIPLE ${card.r}! You swept the whole pile! +${pWon.length} cards!`);
+      if(checkWin()) return;
+      setTimeout(aiTurn,800+Math.random()*400);
+      return;
+    }
+  }
+
+  setStatus(`Played ${card.r}${card.s} ✓ — AI thinking...`,'');
+  if(checkWin()) return;
+  playerTurn=false; busy=true;
+  setTimeout(aiTurn, 800+Math.random()*500);
+}
+
+// ===== AI TURN =====
+function aiTurn(){
+  if(!gameActive) return;
+  const top=topPile();
+  const playable=aiHand.map((c,i)=>({c,i})).filter(({c})=>!top||match(c,top));
+
+  if(playable.length){
+    // Pick best: prefer rank match, then highest chance
+    let pick=playable[0];
+    if(top){
+      const rk=playable.find(({c})=>c.r===top.r);
+      if(rk) pick=rk;
+    }
+    const card=aiHand.splice(pick.i,1)[0];
+    pile.push(card); render(); flash('pile-wrap',true);
+
+    // Triple check
+    if(pile.length>=3){
+      const [a,b,c2]=[pile[pile.length-3],pile[pile.length-2],pile[pile.length-1]];
+      if(a.r===b.r&&b.r===c2.r){
+        aiWon.push(...pile.splice(0));
+        render(); flash('a-won-pile',true);
+        setStatus(`🤖 AI TRIPLE ${card.r}! AI swept the pile! +${aiWon.length} cards!`);
+        if(checkWin()) return;
+        playerTurn=true; busy=false;
+        setTimeout(()=>setStatus(`Your turn! Draw or play.`),1200);
+        return;
+      }
+    }
+    setStatus(`AI played ${card.r}${card.s} — your turn!`,'Draw or play a matching card');
+  } else {
+    // AI draws
+    if(!deck.length){
+      if(pile.length>1){ const top2=pile.pop(); deck=shuffle(pile); pile=[top2]; }
+    }
+    if(deck.length){
+      const c=deck.pop(); aiHand.push(c); render();
+      setStatus(`AI drew a card — your turn!`,'Draw or play a matching card');
+    } else {
+      setStatus(`AI is stuck! Your turn.`,'Draw or play a matching card');
+    }
+  }
+
+  if(checkWin()) return;
+  playerTurn=true; busy=false;
+}
+
+// ===== WIN CHECK =====
+function checkWin(){
+  if(!pHand.length){ endGame(true); return true; }
+  if(!aiHand.length){ endGame(false); return true; }
+  return false;
+}
+
+function endGame(playerWins){
+  gameActive=false;
+  const eo=document.getElementById('end-overlay');
+  document.getElementById('end-title').textContent=playerWins?'🏆 YOU WIN!':'💀 AI WINS';
+  document.getElementById('end-title').style.color=playerWins?'#d4a843':'#c8192a';
+  document.getElementById('end-sub').textContent=playerWins
+    ?`You emptied your hand! Cards collected: ${pWon.length}`
+    :`The dealer cleared their hand. Cards collected: ${aiWon.length}`;
+  eo.style.display='flex';
+}
+</script>
+</body>
+</html>
