@@ -532,6 +532,14 @@ function pulseTopPileCard(){
   top.classList.add('anim-flip');
 }
 
+function kickDeck3D(){
+  const deckWrap=document.getElementById('deck-wrap');
+  if(!deckWrap) return;
+  deckWrap.classList.remove('anim-deck-kick');
+  void deckWrap.offsetWidth;
+  deckWrap.classList.add('anim-deck-kick');
+}
+
 // ===== CARD HTML =====
 function cardFace(c, extra=''){
   const col=isRed(c)?'red':'black';
@@ -629,11 +637,13 @@ function renderWon(){
   if(pWon.length){
     const top=pWon[pWon.length-1];
     pw.innerHTML=cardFace(top); pw.style.border='none';
-  } else { pw.innerHTML='<span>YOUR<br>WON<br>PILE</span>'; pw.style.border=''; }
+    pw.classList.add('has-cards');
+  } else { pw.innerHTML='<span>YOUR<br>WON<br>PILE</span>'; pw.style.border=''; pw.classList.remove('has-cards'); }
   if(aiWon.length){
     const top=aiWon[aiWon.length-1];
     aw.innerHTML=cardFace(top); aw.style.border='none';
-  } else { aw.innerHTML='<span>AI<br>WON<br>PILE</span>'; aw.style.border=''; }
+    aw.classList.add('has-cards');
+  } else { aw.innerHTML='<span>AI<br>WON<br>PILE</span>'; aw.style.border=''; aw.classList.remove('has-cards'); }
   document.getElementById('p-won-count').textContent=pWon.length?pWon.length+' won':'';
   document.getElementById('a-won-count').textContent=aiWon.length?aiWon.length+' won':'';
 }
@@ -684,6 +694,7 @@ function playerDraw(){
   if(deck.length){
     const c=deck.pop(); pHand.push(c); selectedIdx=null;
     render();
+    kickDeck3D();
     flash('deck-wrap',true);
     setStatus(`You drew ${c.r} ${c.s}!`, 'Now play a matching card from your hand');
     checkWin();
@@ -771,6 +782,7 @@ function aiTurn(){
     }
     if(deck.length){
       const c=deck.pop(); aiHand.push(c); render();
+      kickDeck3D();
       setStatus(`AI drew a card — your turn!`,'Draw or play a matching card');
     } else {
       setStatus(`AI is stuck! Your turn.`,'Draw or play a matching card');
