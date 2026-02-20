@@ -457,17 +457,68 @@ const REDS = new Set(['♥','♦']);
 
 let deck=[], pile=[], pHand=[], aiHand=[], pWon=[], aiWon=[];
 let selectedIdx=null, playerTurn=true, busy=false, gameActive=false;
+const CAN_TILT = window.matchMedia && window.matchMedia('(hover: hover)').matches;
+const TILT_SELECTOR = '#player-hand .hand-card, #deck-inner .card, #pile-inner .card, #p-won-pile .card, #a-won-pile .card';
 
 function mkDeck(){ const d=[]; for(const s of SUITS) for(const r of RANKS) d.push({r,s}); return d; }
 function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=0|Math.random()*(i+1);[a[i],a[j]]=[a[j],a[i]];} return a; }
 function match(c,t){ return c.r===t.r||c.s===t.s; }
 function isRed(c){ return REDS.has(c.s); }
 function topPile(){ return pile.length?pile[pile.length-1]:null; }
+function clamp(v,min,max){ return Math.max(min,Math.min(max,v)); }
+
+function bindCardTilt(el, strength){
+  if(!CAN_TILT || !el || el.dataset.tiltBound==='1') return;
+  el.dataset.tiltBound='1';
+
+  const resetTilt=()=>{
+    el.style.setProperty('--pitch','0deg');
+    el.style.setProperty('--yaw','0deg');
+    el.style.setProperty('--gloss-x','50%');
+    el.style.setProperty('--gloss-y','18%');
+    el.classList.remove('tilt-active');
+  };
+
+  el.addEventListener('pointermove',(ev)=>{
+    const rect=el.getBoundingClientRect();
+    if(!rect.width||!rect.height) return;
+    const x=clamp((ev.clientX-rect.left)/rect.width,0,1);
+    const y=clamp((ev.clientY-rect.top)/rect.height,0,1);
+    const yaw=((x-0.5)*strength*2).toFixed(2)+'deg';
+    const pitch=((0.5-y)*strength*1.6).toFixed(2)+'deg';
+    el.style.setProperty('--yaw',yaw);
+    el.style.setProperty('--pitch',pitch);
+    el.style.setProperty('--gloss-x',(x*100).toFixed(1)+'%');
+    el.style.setProperty('--gloss-y',(y*100).toFixed(1)+'%');
+    el.classList.add('tilt-active');
+  });
+
+  el.addEventListener('pointerenter',()=>el.classList.add('tilt-active'));
+  el.addEventListener('pointerleave',resetTilt);
+  el.addEventListener('pointercancel',resetTilt);
+  resetTilt();
+}
+
+function refresh3DInteractions(){
+  if(!CAN_TILT) return;
+  document.querySelectorAll(TILT_SELECTOR).forEach((el)=>{
+    bindCardTilt(el, el.classList.contains('hand-card') ? 12 : 8);
+  });
+}
+
+function pulseTopPileCard(){
+  const top=document.querySelector('#pile-inner .card.face');
+  if(!top) return;
+  top.classList.remove('anim-flip');
+  void top.offsetWidth;
+  top.classList.add('anim-flip');
+}
 
 // ===== CARD HTML =====
 function cardFace(c, extra=''){
   const col=isRed(c)?'red':'black';
   return `<div class="card face ${col} ${extra}" data-r="${c.r}" data-s="${c.s}">
+    <div class="card-gloss"></div>
     <div class="cr"><div class="rk">${c.r}</div><div class="st">${c.s}</div></div>
     <div class="big">${c.s}</div>
     <div class="cr bot"><div class="rk">${c.r}</div><div class="st">${c.s}</div></div>
@@ -480,6 +531,7 @@ function cardBack(extra=''){
 // ===== RENDER =====
 function render(){
   renderDeck(); renderPile(); renderAI(); renderPlayer(); renderWon(); updateHUD();
+  refresh3DInteractions();
 }
 
 function renderDeck(){
