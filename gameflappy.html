@@ -1,0 +1,956 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flappy Skyrun 3D</title>
+    <style>
+        :root {
+            --ink: #10213a;
+            --panel: rgba(16, 33, 22, 0.58);
+            --panel-border: rgba(188, 238, 192, 0.36);
+            --accent: #2e8b57;
+            --accent-strong: #1f6f43;
+            --text-soft: rgba(240, 255, 239, 0.9);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            height: 100%;
+            overflow: hidden;
+            background: radial-gradient(circle at 22% 18%, #a8e5ff 0%, #76bde4 36%, #4984bd 70%, #2a4e80 100%);
+            font-family: "Trebuchet MS", "Segoe UI", Verdana, sans-serif;
+            color: #ffffff;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #hud {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            z-index: 10;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            padding: 10px 14px;
+            border-radius: 14px;
+            background: var(--panel);
+            border: 1px solid var(--panel-border);
+            backdrop-filter: blur(7px);
+            pointer-events: none;
+        }
+
+        #brand {
+            font-weight: 900;
+            letter-spacing: 1.4px;
+            font-size: 15px;
+            color: #e9ffe6;
+            text-transform: uppercase;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+            padding-right: 8px;
+            border-right: 1px solid rgba(202, 240, 195, 0.3);
+        }
+
+        .score-wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            line-height: 1;
+            min-width: 72px;
+        }
+
+        .label {
+            font-size: 10px;
+            letter-spacing: 1.2px;
+            color: rgba(255, 255, 255, 0.72);
+            margin-bottom: 3px;
+        }
+
+        .score-num {
+            font-size: 38px;
+            font-weight: 900;
+            text-shadow: 0 2px 9px rgba(0, 0, 0, 0.3);
+            color: #ffffff;
+            transition: transform 0.2s ease;
+        }
+
+        .score-num.small {
+            font-size: 26px;
+            color: #d8ffd6;
+        }
+
+        #score.bump {
+            animation: score-pop 0.26s ease-out;
+        }
+
+        #message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: min(88vw, 460px);
+            transform: translate(-50%, -50%) scale(0.94);
+            z-index: 12;
+            padding: 26px 28px;
+            text-align: center;
+            border-radius: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.42);
+            background: linear-gradient(165deg, rgba(20, 52, 28, 0.82), rgba(12, 33, 19, 0.75));
+            box-shadow: 0 16px 38px rgba(0, 0, 0, 0.32);
+            backdrop-filter: blur(8px);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.22s ease, transform 0.22s ease;
+        }
+
+        #message.show {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+
+        #message-title {
+            margin: 0 0 8px 0;
+            font-size: clamp(30px, 5vw, 44px);
+            letter-spacing: 0.8px;
+            color: #f3ffd9;
+            text-shadow: 0 6px 16px rgba(0, 0, 0, 0.34);
+        }
+
+        #message-text {
+            margin: 0;
+            font-size: clamp(15px, 2.2vw, 20px);
+            color: var(--text-soft);
+            line-height: 1.35;
+            white-space: pre-line;
+        }
+
+        #hint {
+            position: absolute;
+            left: 50%;
+            bottom: 18px;
+            transform: translateX(-50%);
+            z-index: 11;
+            padding: 8px 16px;
+            border-radius: 999px;
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            background: rgba(13, 34, 20, 0.5);
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 14px;
+            letter-spacing: 0.5px;
+            pointer-events: none;
+            transition: opacity 0.24s ease, transform 0.24s ease;
+            backdrop-filter: blur(6px);
+        }
+
+        #hint.hidden {
+            opacity: 0;
+            transform: translateX(-50%) translateY(8px);
+        }
+
+        @keyframes score-pop {
+            0% { transform: scale(1); color: #ffffff; }
+            30% { transform: scale(1.22); color: #fff1b8; }
+            100% { transform: scale(1); color: #ffffff; }
+        }
+
+        @media (max-width: 700px) {
+            #hud {
+                top: 10px;
+                left: 10px;
+                padding: 9px 11px;
+                gap: 8px;
+            }
+
+            #brand {
+                font-size: 12px;
+                padding-right: 6px;
+            }
+
+            .score-num {
+                font-size: 30px;
+            }
+
+            .score-num.small {
+                font-size: 22px;
+            }
+
+            #hint {
+                bottom: 12px;
+                font-size: 13px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        <div id="brand">Flappy Skyrun</div>
+        <div class="score-wrap">
+            <span class="label">SCORE</span>
+            <span id="score" class="score-num">0</span>
+        </div>
+        <div class="score-wrap">
+            <span class="label">BEST</span>
+            <span id="best" class="score-num small">0</span>
+        </div>
+    </div>
+
+    <div id="message" class="show">
+        <h1 id="message-title">Tap to Start</h1>
+        <p id="message-text">Press Space, click, or tap to flap through the gaps.</p>
+    </div>
+
+    <div id="hint">Space / Click / Tap</div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.128.0/build/three.module.js"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from "three";
+
+        const scoreEl = document.getElementById("score");
+        const bestEl = document.getElementById("best");
+        const messageEl = document.getElementById("message");
+        const messageTitleEl = document.getElementById("message-title");
+        const messageTextEl = document.getElementById("message-text");
+        const hintEl = document.getElementById("hint");
+
+        const BEST_SCORE_KEY = "tubonge_flappy_skyrun_best";
+
+        function loadBestScore() {
+            try {
+                const value = Number(localStorage.getItem(BEST_SCORE_KEY));
+                return Number.isFinite(value) ? Math.max(0, value) : 0;
+            } catch {
+                return 0;
+            }
+        }
+
+        function saveBestScore(bestScore) {
+            try {
+                localStorage.setItem(BEST_SCORE_KEY, String(bestScore));
+            } catch {
+                // Ignore storage errors in restricted browser contexts.
+            }
+        }
+
+        function setMessage(title, text, visible) {
+            messageTitleEl.textContent = title;
+            messageTextEl.textContent = text;
+            messageEl.classList.toggle("show", visible);
+        }
+
+        function setHintVisible(visible) {
+            hintEl.classList.toggle("hidden", !visible);
+        }
+
+        function updateScoreDisplay(withPop = false) {
+            scoreEl.textContent = String(game.score);
+            if (withPop) {
+                scoreEl.classList.remove("bump");
+                void scoreEl.offsetWidth;
+                scoreEl.classList.add("bump");
+            }
+        }
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x8fd3ff);
+        scene.fog = new THREE.Fog(0x8fd3ff, 22, 74);
+
+        const camera = new THREE.PerspectiveCamera(
+            55,
+            window.innerWidth / window.innerHeight,
+            0.1,
+            140
+        );
+        camera.position.set(2, 8.4, 18);
+        const cameraLookTarget = new THREE.Vector3(-2.5, 7, 0);
+        camera.lookAt(cameraLookTarget);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.04;
+        document.body.appendChild(renderer.domElement);
+
+        const world = {
+            birdX: -6,
+            startY: 7,
+            groundY: 0,
+            ceilingY: 15,
+            spawnX: 24,
+            despawnX: -28,
+            pipeRadius: 1.05
+        };
+
+        const game = {
+            state: "ready",
+            score: 0,
+            best: loadBestScore(),
+            pipes: [],
+            speed: 7.8,
+            baseSpeed: 7.8,
+            maxSpeed: 12.6,
+            gap: 5.7,
+            baseGap: 5.7,
+            minGap: 4.2,
+            spacing: 11.6,
+            baseSpacing: 11.6,
+            minSpacing: 8.6,
+            gravity: -30.5,
+            flapImpulse: 11.8,
+            maxFallSpeed: -19,
+            velocityY: 0,
+            birdHitboxX: 0.5,
+            birdHitboxY: 0.47,
+            wingTime: 0,
+            flapKick: 0,
+            idleTime: 0,
+            overTimer: 0
+        };
+
+        bestEl.textContent = String(game.best);
+
+        const hemiLight = new THREE.HemisphereLight(0xcdf1ff, 0x3a4e4c, 0.95);
+        scene.add(hemiLight);
+
+        const sunLight = new THREE.DirectionalLight(0xfff1c2, 1.25);
+        sunLight.position.set(20, 28, 12);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 1536;
+        sunLight.shadow.mapSize.height = 1536;
+        sunLight.shadow.camera.near = 1;
+        sunLight.shadow.camera.far = 90;
+        sunLight.shadow.camera.left = -24;
+        sunLight.shadow.camera.right = 24;
+        sunLight.shadow.camera.top = 24;
+        sunLight.shadow.camera.bottom = -24;
+        scene.add(sunLight);
+
+        const fillLight = new THREE.PointLight(0x7bd6ff, 0.35, 80);
+        fillLight.position.set(-12, 9, 16);
+        scene.add(fillLight);
+
+        const sunMesh = new THREE.Mesh(
+            new THREE.SphereGeometry(2.4, 20, 20),
+            new THREE.MeshBasicMaterial({ color: 0xfff0ad })
+        );
+        sunMesh.position.set(30, 19, -30);
+        scene.add(sunMesh);
+
+        const ground = new THREE.Mesh(
+            new THREE.PlaneGeometry(120, 26),
+            new THREE.MeshStandardMaterial({
+                color: 0x228b22,
+                roughness: 0.88,
+                metalness: 0.06
+            })
+        );
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.set(0, world.groundY, 0);
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        const laneMarkers = [];
+        const markerSpacing = 3.2;
+        const markerCount = 24;
+        for (let i = 0; i < markerCount; i += 1) {
+            const marker = new THREE.Mesh(
+                new THREE.BoxGeometry(1.9, 0.08, 0.56),
+                new THREE.MeshStandardMaterial({
+                    color: 0xc6dfaf,
+                    emissive: 0x214127,
+                    emissiveIntensity: 0.12,
+                    roughness: 0.32
+                })
+            );
+            marker.position.set(world.despawnX + i * markerSpacing, world.groundY + 0.05, 0);
+            marker.receiveShadow = true;
+            scene.add(marker);
+            laneMarkers.push(marker);
+        }
+
+        const treeMeshes = [];
+        const trunkGeometry = new THREE.CylinderGeometry(0.22, 0.3, 1.7, 8);
+        const lowerCanopyGeometry = new THREE.ConeGeometry(1.2, 2.35, 10);
+        const upperCanopyGeometry = new THREE.ConeGeometry(0.85, 1.75, 10);
+        const trunkMaterial = new THREE.MeshStandardMaterial({
+            color: 0x5d3f20,
+            roughness: 0.86,
+            metalness: 0.03
+        });
+        const canopyMaterialA = new THREE.MeshStandardMaterial({
+            color: 0x205f32,
+            roughness: 0.82,
+            metalness: 0.04
+        });
+        const canopyMaterialB = new THREE.MeshStandardMaterial({
+            color: 0x2d7640,
+            roughness: 0.8,
+            metalness: 0.03
+        });
+
+        function createTree(x, z, scale, drift, wrapWidth, foliageVariant) {
+            const tree = new THREE.Group();
+
+            const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
+            trunk.position.y = 0.85;
+            trunk.castShadow = true;
+            trunk.receiveShadow = true;
+            tree.add(trunk);
+
+            const canopyMaterial = foliageVariant === 0 ? canopyMaterialA : canopyMaterialB;
+
+            const lowerCanopy = new THREE.Mesh(lowerCanopyGeometry, canopyMaterial);
+            lowerCanopy.position.y = 2.1;
+            lowerCanopy.castShadow = true;
+            tree.add(lowerCanopy);
+
+            const upperCanopy = new THREE.Mesh(upperCanopyGeometry, canopyMaterial);
+            upperCanopy.position.y = 3.2;
+            upperCanopy.castShadow = true;
+            tree.add(upperCanopy);
+
+            tree.position.set(x, world.groundY + 0.02, z);
+            tree.scale.setScalar(scale);
+            tree.userData = {
+                drift,
+                wrapWidth
+            };
+            scene.add(tree);
+            treeMeshes.push(tree);
+        }
+
+        function addTreeLayer({
+            z,
+            count,
+            spacing,
+            drift,
+            scaleMin,
+            scaleMax,
+            seedOffset
+        }) {
+            const wrapWidth = count * spacing;
+            for (let i = 0; i < count; i += 1) {
+                const mix = (Math.sin((i + seedOffset) * 0.86) + 1) * 0.5;
+                const scale = THREE.MathUtils.lerp(scaleMin, scaleMax, mix);
+                const foliageVariant = (i + seedOffset) % 2;
+                createTree(world.despawnX + i * spacing, z, scale, drift, wrapWidth, foliageVariant);
+            }
+        }
+
+        addTreeLayer({
+            z: -14.5,
+            count: 18,
+            spacing: 6.2,
+            drift: 0.2,
+            scaleMin: 1.02,
+            scaleMax: 1.52,
+            seedOffset: 3
+        });
+
+        addTreeLayer({
+            z: -9.2,
+            count: 20,
+            spacing: 5.4,
+            drift: 0.29,
+            scaleMin: 0.86,
+            scaleMax: 1.3,
+            seedOffset: 9
+        });
+
+        const clouds = [];
+
+        function createCloud(x, y, z, scale, drift) {
+            const cloudGroup = new THREE.Group();
+            const cloudMaterial = new THREE.MeshStandardMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.85,
+                roughness: 1,
+                metalness: 0
+            });
+            const puffGeometry = new THREE.SphereGeometry(1, 14, 12);
+
+            const puffs = [
+                { x: -1.1, y: 0, s: 1.05 },
+                { x: 0, y: 0.2, s: 1.2 },
+                { x: 1.15, y: 0.02, s: 0.95 }
+            ];
+
+            for (const puff of puffs) {
+                const mesh = new THREE.Mesh(puffGeometry, cloudMaterial);
+                mesh.scale.setScalar(puff.s);
+                mesh.position.set(puff.x, puff.y, 0);
+                cloudGroup.add(mesh);
+            }
+
+            cloudGroup.position.set(x, y, z);
+            cloudGroup.scale.setScalar(scale);
+            cloudGroup.userData = { drift };
+            scene.add(cloudGroup);
+            clouds.push(cloudGroup);
+        }
+
+        createCloud(-8, 12, -11, 1.45, 0.16);
+        createCloud(8, 10.5, -9.5, 1.15, 0.2);
+        createCloud(22, 13, -14, 1.6, 0.13);
+        createCloud(32, 11.4, -8.2, 1.2, 0.22);
+        createCloud(47, 9.7, -12.4, 1.35, 0.17);
+
+        function createBird() {
+            const birdGroup = new THREE.Group();
+
+            const body = new THREE.Mesh(
+                new THREE.SphereGeometry(0.72, 32, 24),
+                new THREE.MeshStandardMaterial({
+                    color: 0xffd454,
+                    emissive: 0x503100,
+                    emissiveIntensity: 0.08,
+                    roughness: 0.4,
+                    metalness: 0.04
+                })
+            );
+            body.castShadow = true;
+            birdGroup.add(body);
+
+            const belly = new THREE.Mesh(
+                new THREE.SphereGeometry(0.5, 22, 18),
+                new THREE.MeshStandardMaterial({ color: 0xffee9c, roughness: 0.5 })
+            );
+            belly.scale.set(0.95, 0.82, 0.88);
+            belly.position.set(0.22, -0.2, 0);
+            belly.castShadow = true;
+            birdGroup.add(belly);
+
+            const beak = new THREE.Mesh(
+                new THREE.ConeGeometry(0.18, 0.48, 12),
+                new THREE.MeshStandardMaterial({ color: 0xff8f24, roughness: 0.35 })
+            );
+            beak.rotation.z = -Math.PI / 2;
+            beak.position.set(0.8, 0.01, 0);
+            beak.castShadow = true;
+            birdGroup.add(beak);
+
+            const eyeGeometry = new THREE.SphereGeometry(0.14, 16, 12);
+            const pupilGeometry = new THREE.SphereGeometry(0.06, 12, 8);
+            const eyeMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.22 });
+            const pupilMaterial = new THREE.MeshStandardMaterial({ color: 0x141414, roughness: 0.65 });
+
+            const eyeTop = 0.2;
+            const eyeForward = 0.45;
+
+            const eyeLeft = new THREE.Mesh(eyeGeometry, eyeMaterial);
+            eyeLeft.position.set(eyeForward, eyeTop, 0.24);
+            birdGroup.add(eyeLeft);
+
+            const eyeRight = new THREE.Mesh(eyeGeometry, eyeMaterial);
+            eyeRight.position.set(eyeForward, eyeTop, -0.24);
+            birdGroup.add(eyeRight);
+
+            const pupilLeft = new THREE.Mesh(pupilGeometry, pupilMaterial);
+            pupilLeft.position.set(0.54, 0.18, 0.28);
+            birdGroup.add(pupilLeft);
+
+            const pupilRight = new THREE.Mesh(pupilGeometry, pupilMaterial);
+            pupilRight.position.set(0.54, 0.18, -0.28);
+            birdGroup.add(pupilRight);
+
+            const tail = new THREE.Mesh(
+                new THREE.ConeGeometry(0.2, 0.55, 10),
+                new THREE.MeshStandardMaterial({ color: 0xffa62a, roughness: 0.35 })
+            );
+            tail.rotation.z = Math.PI / 2;
+            tail.position.set(-0.74, -0.02, 0);
+            tail.castShadow = true;
+            birdGroup.add(tail);
+
+            const wingMaterial = new THREE.MeshStandardMaterial({
+                color: 0xf8b11d,
+                emissive: 0x4d2f00,
+                emissiveIntensity: 0.07,
+                roughness: 0.38
+            });
+            const wingGeometry = new THREE.BoxGeometry(0.56, 0.12, 0.82);
+
+            const leftWingPivot = new THREE.Group();
+            leftWingPivot.position.set(-0.05, 0.06, 0.5);
+            const leftWing = new THREE.Mesh(wingGeometry, wingMaterial);
+            leftWing.position.set(0.04, -0.02, 0.2);
+            leftWing.castShadow = true;
+            leftWingPivot.add(leftWing);
+            birdGroup.add(leftWingPivot);
+
+            const rightWingPivot = new THREE.Group();
+            rightWingPivot.position.set(-0.05, 0.06, -0.5);
+            const rightWing = new THREE.Mesh(wingGeometry, wingMaterial);
+            rightWing.position.set(0.04, -0.02, -0.2);
+            rightWing.castShadow = true;
+            rightWingPivot.add(rightWing);
+            birdGroup.add(rightWingPivot);
+
+            birdGroup.userData = {
+                leftWingPivot,
+                rightWingPivot
+            };
+
+            return birdGroup;
+        }
+
+        const bird = createBird();
+        bird.position.set(world.birdX, world.startY, 0);
+        scene.add(bird);
+
+        function createPipePair(x, gapY, gapSize) {
+            const pipeGroup = new THREE.Group();
+
+            const pipeMaterial = new THREE.MeshStandardMaterial({
+                color: 0x2da760,
+                emissive: 0x11351f,
+                emissiveIntensity: 0.12,
+                roughness: 0.58,
+                metalness: 0.07
+            });
+            const rimMaterial = new THREE.MeshStandardMaterial({
+                color: 0x43cc7b,
+                roughness: 0.4,
+                metalness: 0.12
+            });
+
+            const pipeHeight = 20.5;
+            const pipeGeometry = new THREE.CylinderGeometry(world.pipeRadius, world.pipeRadius, pipeHeight, 18, 1);
+            const rimGeometry = new THREE.CylinderGeometry(world.pipeRadius + 0.24, world.pipeRadius + 0.24, 0.42, 18, 1);
+
+            const bottomPipe = new THREE.Mesh(pipeGeometry, pipeMaterial);
+            bottomPipe.position.y = gapY - gapSize * 0.5 - pipeHeight * 0.5;
+            bottomPipe.castShadow = true;
+            bottomPipe.receiveShadow = true;
+            pipeGroup.add(bottomPipe);
+
+            const topPipe = new THREE.Mesh(pipeGeometry, pipeMaterial);
+            topPipe.position.y = gapY + gapSize * 0.5 + pipeHeight * 0.5;
+            topPipe.castShadow = true;
+            topPipe.receiveShadow = true;
+            pipeGroup.add(topPipe);
+
+            const lowerRim = new THREE.Mesh(rimGeometry, rimMaterial);
+            lowerRim.position.y = gapY - gapSize * 0.5;
+            lowerRim.castShadow = true;
+            pipeGroup.add(lowerRim);
+
+            const upperRim = new THREE.Mesh(rimGeometry, rimMaterial);
+            upperRim.position.y = gapY + gapSize * 0.5;
+            upperRim.castShadow = true;
+            pipeGroup.add(upperRim);
+
+            pipeGroup.position.x = x;
+            pipeGroup.userData = {
+                gapY,
+                gapSize,
+                scored: false
+            };
+
+            return pipeGroup;
+        }
+
+        function clearPipes() {
+            for (const pipe of game.pipes) {
+                scene.remove(pipe);
+            }
+            game.pipes.length = 0;
+        }
+
+        function randomGapCenter() {
+            const minCenter = world.groundY + game.gap * 0.5 + 1.05;
+            const maxCenter = world.ceilingY - game.gap * 0.5 - 1.05;
+            return THREE.MathUtils.randFloat(minCenter, maxCenter);
+        }
+
+        function spawnPipe(x) {
+            const pair = createPipePair(x, randomGapCenter(), game.gap);
+            game.pipes.push(pair);
+            scene.add(pair);
+        }
+
+        function refreshDifficulty() {
+            const factor = Math.min(game.score, 42);
+            game.speed = Math.min(game.maxSpeed, game.baseSpeed + factor * 0.115);
+            game.gap = Math.max(game.minGap, game.baseGap - factor * 0.032);
+            game.spacing = Math.max(game.minSpacing, game.baseSpacing - factor * 0.047);
+        }
+
+        function flap() {
+            game.velocityY = game.flapImpulse;
+            game.flapKick = 1;
+        }
+
+        function startGame() {
+            clearPipes();
+            game.state = "playing";
+            game.score = 0;
+            game.speed = game.baseSpeed;
+            game.gap = game.baseGap;
+            game.spacing = game.baseSpacing;
+            game.velocityY = 0;
+            game.wingTime = 0;
+            game.flapKick = 0;
+            game.overTimer = 0;
+            updateScoreDisplay(false);
+
+            bird.position.set(world.birdX, world.startY, 0);
+            bird.rotation.set(0, 0, 0);
+            bird.scale.set(1, 1, 1);
+
+            const firstPipeX = world.spawnX + 1.5;
+            spawnPipe(firstPipeX);
+            spawnPipe(firstPipeX + game.spacing);
+            spawnPipe(firstPipeX + game.spacing * 2);
+
+            setHintVisible(false);
+            setMessage("", "", false);
+            flap();
+        }
+
+        function triggerGameOver() {
+            if (game.state !== "playing") {
+                return;
+            }
+
+            game.state = "gameover";
+            game.overTimer = 0;
+            game.velocityY = Math.min(game.velocityY, -4.8);
+
+            if (game.score > game.best) {
+                game.best = game.score;
+                saveBestScore(game.best);
+                bestEl.textContent = String(game.best);
+            }
+
+            const message = `Score ${game.score}  |  Best ${game.best}\nTap to retry`;
+            setMessage("Game Over", message, true);
+            setHintVisible(true);
+        }
+
+        function handleInput(event) {
+            if (event && event.cancelable) {
+                event.preventDefault();
+            }
+
+            if (game.state === "ready") {
+                startGame();
+                return;
+            }
+
+            if (game.state === "playing") {
+                flap();
+                return;
+            }
+
+            if (game.state === "gameover" && game.overTimer > 0.2) {
+                startGame();
+            }
+        }
+
+        window.addEventListener("pointerdown", handleInput, { passive: false });
+
+        window.addEventListener("keydown", (event) => {
+            if (event.code === "Space") {
+                handleInput(event);
+            }
+        });
+
+        function updateBird(dt) {
+            if (game.state === "ready") {
+                game.idleTime += dt;
+                bird.position.y = world.startY + Math.sin(game.idleTime * 2.5) * 0.34;
+                bird.rotation.z = Math.sin(game.idleTime * 2.5) * 0.08;
+            } else {
+                game.velocityY += game.gravity * dt;
+                game.velocityY = Math.max(game.velocityY, game.maxFallSpeed);
+                bird.position.y += game.velocityY * dt;
+
+                const targetTilt = THREE.MathUtils.clamp(game.velocityY * 0.045, -0.95, 0.48);
+                const tiltBlend = 1 - Math.exp(-dt * 12);
+                bird.rotation.z = THREE.MathUtils.lerp(bird.rotation.z, targetTilt, tiltBlend);
+            }
+
+            const dynamicWingSpeed =
+                game.state === "ready"
+                    ? 8
+                    : THREE.MathUtils.mapLinear(Math.abs(game.velocityY), 0, 20, 9, 22);
+            game.wingTime += dt * dynamicWingSpeed;
+            game.flapKick = Math.max(0, game.flapKick - dt * 4.5);
+
+            const wingAngle = Math.sin(game.wingTime) * 0.55 + game.flapKick * 0.38;
+            bird.userData.leftWingPivot.rotation.x = wingAngle;
+            bird.userData.rightWingPivot.rotation.x = -wingAngle;
+
+            const squash = 1 - game.flapKick * 0.05;
+            bird.scale.set(1 + game.flapKick * 0.06, squash, 1 + game.flapKick * 0.06);
+        }
+
+        function updatePipes(dt) {
+            const shift = game.speed * dt;
+
+            for (let i = game.pipes.length - 1; i >= 0; i -= 1) {
+                const pipe = game.pipes[i];
+                pipe.position.x -= shift;
+
+                if (!pipe.userData.scored && pipe.position.x + world.pipeRadius < world.birdX - 0.12) {
+                    pipe.userData.scored = true;
+                    game.score += 1;
+                    updateScoreDisplay(true);
+                }
+
+                if (pipe.position.x < world.despawnX) {
+                    scene.remove(pipe);
+                    game.pipes.splice(i, 1);
+                }
+            }
+
+            if (game.pipes.length === 0) {
+                spawnPipe(world.spawnX);
+                return;
+            }
+
+            let rightmost = world.despawnX;
+            for (const pipe of game.pipes) {
+                rightmost = Math.max(rightmost, pipe.position.x);
+            }
+
+            while (rightmost < world.spawnX + game.spacing) {
+                rightmost += game.spacing;
+                spawnPipe(rightmost);
+            }
+        }
+
+        function checkCollision() {
+            const birdY = bird.position.y;
+
+            if (birdY - game.birdHitboxY <= world.groundY + 0.04) {
+                return true;
+            }
+
+            if (birdY + game.birdHitboxY >= world.ceilingY) {
+                return true;
+            }
+
+            for (const pipe of game.pipes) {
+                const horizontal = Math.abs(pipe.position.x - world.birdX);
+                if (horizontal > world.pipeRadius + game.birdHitboxX) {
+                    continue;
+                }
+
+                const gapBottom = pipe.userData.gapY - pipe.userData.gapSize * 0.5;
+                const gapTop = pipe.userData.gapY + pipe.userData.gapSize * 0.5;
+                const safeMargin = 0.09;
+
+                if (
+                    birdY - game.birdHitboxY < gapBottom + safeMargin ||
+                    birdY + game.birdHitboxY > gapTop - safeMargin
+                ) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        function updateEnvironment(dt) {
+            const travelSpeed = game.state === "playing" ? game.speed : 2.2;
+            const markerWrap = markerSpacing * markerCount;
+
+            for (const marker of laneMarkers) {
+                marker.position.x -= travelSpeed * dt;
+                if (marker.position.x < world.despawnX - markerSpacing) {
+                    marker.position.x += markerWrap;
+                }
+            }
+
+            for (const tree of treeMeshes) {
+                tree.position.x -= travelSpeed * tree.userData.drift * dt;
+                if (tree.position.x < world.despawnX - 8) {
+                    tree.position.x += tree.userData.wrapWidth;
+                }
+            }
+
+            for (const cloud of clouds) {
+                cloud.position.x -= travelSpeed * cloud.userData.drift * dt;
+                if (cloud.position.x < world.despawnX - 12) {
+                    cloud.position.x += 70;
+                    cloud.position.y = 9 + Math.random() * 5.2;
+                }
+            }
+        }
+
+        function updateCamera(dt) {
+            const desiredLookY = THREE.MathUtils.clamp(bird.position.y + 0.4, 5.2, 10.8);
+            const desiredCamY = desiredLookY + 1.35;
+            const blend = 1 - Math.exp(-dt * 4.6);
+
+            camera.position.y = THREE.MathUtils.lerp(camera.position.y, desiredCamY, blend);
+            cameraLookTarget.y = THREE.MathUtils.lerp(cameraLookTarget.y, desiredLookY, blend);
+            camera.lookAt(cameraLookTarget);
+        }
+
+        function gameStep(dt) {
+            if (game.state === "ready") {
+                updateBird(dt);
+            } else if (game.state === "playing") {
+                refreshDifficulty();
+                updateBird(dt);
+                updatePipes(dt);
+                if (checkCollision()) {
+                    triggerGameOver();
+                }
+            } else {
+                game.overTimer += dt;
+                updateBird(dt);
+                if (bird.position.y - game.birdHitboxY <= world.groundY + 0.04) {
+                    bird.position.y = world.groundY + game.birdHitboxY + 0.04;
+                    game.velocityY = 0;
+                }
+            }
+
+            updateEnvironment(dt);
+            updateCamera(dt);
+        }
+
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const dt = Math.min(clock.getDelta(), 0.033);
+            gameStep(dt);
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener("resize", () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        });
+
+        setMessage("Tap to Start", "Press Space, click, or tap to flap through the gaps.", true);
+        setHintVisible(true);
+        updateScoreDisplay(false);
+
+        animate();
+    </script>
+</body>
+</html>
