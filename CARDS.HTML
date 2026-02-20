@@ -578,8 +578,9 @@ function renderAI(){
   aiHand.forEach((c,i)=>{
     const angle=(i-mid)*2.5;
     const dip=Math.abs(i-mid)*1.5;
+    const depth=Math.max(0,4-Math.abs(i-mid))*2;
     const div=document.createElement('div');
-    div.style.cssText=`position:absolute;left:${i*spread}px;top:${dip}px;z-index:${i};transform:rotate(${angle}deg);`;
+    div.style.cssText=`position:absolute;left:${i*spread}px;top:${dip}px;z-index:${i};transform-style:preserve-3d;transform:perspective(1000px) rotate(${angle}deg) translateZ(${depth}px);`;
     div.innerHTML=cardBack('anim-deal');
     div.firstChild.style.animationDelay=(i*0.04)+'s';
     el.appendChild(div);
@@ -649,6 +650,7 @@ function startGame(){
   for(let i=0;i<5;i++){ pHand.push(deck.pop()); aiHand.push(deck.pop()); }
   pile.push(deck.pop());
   render();
+  pulseTopPileCard();
   setStatus('Your turn! Draw or play a matching card.');
 }
 
@@ -681,12 +683,15 @@ function playCard(idx){
     flash('pile-wrap',false);
     setStatus(`❌ ${card.r}${card.s} doesn't match ${top.r}${top.s} — need same rank or suit!`);
     renderPlayer();
+    refresh3DInteractions();
     return;
   }
 
   // Play it!
   pHand.splice(idx,1); pile.push(card); selectedIdx=null;
-  render(); flash('pile-wrap',true);
+  render();
+  pulseTopPileCard();
+  flash('pile-wrap',true);
 
   // Check triple sweep
   if(pile.length>=3){
